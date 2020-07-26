@@ -44,13 +44,15 @@ fat-pine64-pinetab.img: initramfs-pine64-pinetab.gz kernel-sunxi.gz pine64-pinet
 	@mcopy -i $@ initramfs-pine64-pinetab.gz ::initramfs.gz
 	@mcopy -i $@ pine64-pinetab.scr ::boot.scr
 
-pine64-pinebookpro.img: fat-pine64-pinebookpro.img u-boot-rk3399.bin
+pine64-pinebookpro.img: fat-pine64-pinebookpro.img u-boot-rk3399.itb idbloader-rk3399.img
 	rm -f $@
 	truncate --size 50M $@
 	parted -s $@ mktable msdos
 	parted -s $@ mkpart primary fat32 32768s 100%
 	parted -s $@ set 1 boot on
-	dd if=u-boot-rk3399.bin of=$@ bs=32k seek=1
+	# inspired by https://gitlab.manjaro.org/manjaro-arm/applications/manjaro-arm-installer/-/blob/master/manjaro-arm-installer
+	dd if=idbloader-rk3399.img of=$@ seek=64 conv=notrunc,fsync
+	dd if=u-boot-rk3399.itb of=$@ seek=16384 conv=notrunc,fsync
 	dd if=fat-$@ of=$@ seek=32768 bs=512
 
 fat-pine64-pinebookpro.img: initramfs-pine64-pinebookpro.gz kernel-rockchip.gz src/pine64-pinebookpro.conf dtbs/rockchip/rk3399-pinebook-pro.dtb
@@ -138,12 +140,15 @@ build/atf/rk3399/bl31.elf: src/arm-trusted-firmware
 	@cd src/arm-trusted-firmware; make $(CROSS_FLAGS_BOOT) PLAT=rk3399 bl31
 	@cp src/arm-trusted-firmware/build/rk3399/release/bl31/bl31.elf "$@"
 
-u-boot-rk3399.bin: build/atf/rk3399/bl31.elf src/u-boot
+u-boot-rk3399.itb: build/atf/rk3399/bl31.elf src/u-boot
 	@echo "MAKE  $@"
 	@mkdir -p build/u-boot/rk3399
 	@BL31=../../../build/atf/rk3399/bl31.elf $(MAKE) -C src/u-boot O=../../build/u-boot/rk3399 $(CROSS_FLAGS_BOOT) pinebook-pro-rk3399_defconfig
 	@BL31=../../../build/atf/rk3399/bl31.elf $(MAKE) -C src/u-boot O=../../build/u-boot/rk3399 $(CROSS_FLAGS_BOOT) all
-	@cp build/u-boot/rk3399/u-boot "$@"
+	@cp build/u-boot/rk3399/u-boot.itb "$@"
+
+idbloader-rk3399.img: u-boot-rk3399.itb
+	@cp build/u-boot/rk3399/idbloader.img "$@"
 
 src/linux-rockchip:
 	@echo "WGET  linux-rockchip"
